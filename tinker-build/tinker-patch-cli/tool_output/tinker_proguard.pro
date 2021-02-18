@@ -7,10 +7,10 @@
     *;
 }
 
--keep public class com.tencent.tinker.loader.app.ApplicationLifeCycle {
+-keep public class com.tencent.tinker.entry.ApplicationLifeCycle {
     *;
 }
--keep public class * implements com.tencent.tinker.loader.app.ApplicationLifeCycle {
+-keep public class * implements com.tencent.tinker.entry.ApplicationLifeCycle {
     *;
 }
 
@@ -25,7 +25,20 @@
     *;
 }
 
-#your dex.loader pattern here
--keep class com.tencent.tinker.loader.**
--keep class tinker.sample.android.app.SampleApplication
+-keep public class com.tencent.tinker.loader.TinkerTestDexLoad {
+    *;
+}
 
+-keep public class com.tencent.tinker.entry.TinkerApplicationInlineFence {
+    *;
+}
+
+#for command line version, we must keep all the loader class to avoid proguard mapping conflict
+#your dex.loader pattern here
+-keep public class com.tencent.tinker.loader.** {
+    *;
+}
+
+-keep class tinker.sample.android.app.SampleApplication {
+    *;
+}

@@ -35,13 +35,19 @@ public class InputParam {
     public final String  storealias;
     public final String  storepass;
     public final boolean ignoreWarning;
+    public final boolean allowLoaderInAnyDex;
+    public final boolean removeLoaderForAllDex;
+    public final boolean isProtectedApp;
+    public final boolean supportHotplugComponent;
     public final boolean useSign;
 
     /**
      * tinkerPatch.dex
      */
-    public final ArrayList<String>       dexFilePattern;
-    public final ArrayList<String>       dexLoaderPattern;
+    public final ArrayList<String> dexFilePattern;
+    public final ArrayList<String> dexLoaderPattern;
+    public final ArrayList<String> dexIgnoreWarningLoaderPattern;
+
     public final String                  dexMode;
     /**
      * tinkerPatch.lib
@@ -55,6 +61,10 @@ public class InputParam {
      * tinkerPath.resource ignoreChange
      */
     public final ArrayList<String>       resourceIgnoreChangePattern;
+    /**
+     * tinkerPatch.resource ignoreChangeWarning
+     */
+    public final ArrayList<String>       resourceIgnoreChangeWarningPattern;
     /**
      * tinkerPath.resource largeModSize
      */
@@ -72,28 +82,43 @@ public class InputParam {
      */
     public final String                  sevenZipPath;
 
+    /**
+     * TinkerPatch ark
+     */
+    public final String arkHotPatchPath;
+    public final String arkHotPatchName;
+
     private InputParam(
-        String oldApk,
-        String newApk,
-        String outFolder,
-        File signFile,
-        String keypass,
-        String storealias,
-        String storepass,
-        boolean ignoreWarning,
-        boolean useSign,
+            String oldApk,
+            String newApk,
+            String outFolder,
+            File signFile,
+            String keypass,
+            String storealias,
+            String storepass,
+            boolean ignoreWarning,
+            boolean allowLoaderInAnyDex,
+            boolean removeLoaderForAllDex,
+            boolean isProtectedApp,
+            boolean supportHotplugComponent,
+            boolean useSign,
 
-        ArrayList<String> dexFilePattern,
-        ArrayList<String> dexLoaderPattern,
-        String dexMode,
-        ArrayList<String> soFilePattern,
-        ArrayList<String> resourceFilePattern,
-        ArrayList<String> resourceIgnoreChangePattern,
-        int largeModSize,
-        boolean useApplyResource,
-        HashMap<String, String> configFields,
+            ArrayList<String> dexFilePattern,
+            ArrayList<String> dexLoaderPattern,
+            ArrayList<String> dexIgnoreChangeLoaderPattern,
 
-        String sevenZipPath
+            String dexMode,
+            ArrayList<String> soFilePattern,
+            ArrayList<String> resourceFilePattern,
+            ArrayList<String> resourceIgnoreChangePattern,
+            ArrayList<String> resourceIgnoreChangeWarningPattern,
+            int largeModSize,
+            boolean useApplyResource,
+            HashMap<String, String> configFields,
+
+        String sevenZipPath,
+        String arkHotPatchPath,
+        String arkHotPatchName
     ) {
         this.oldApk = oldApk;
         this.newApk = newApk;
@@ -103,21 +128,29 @@ public class InputParam {
         this.storealias = storealias;
         this.storepass = storepass;
         this.ignoreWarning = ignoreWarning;
+        this.allowLoaderInAnyDex = allowLoaderInAnyDex;
+        this.removeLoaderForAllDex = removeLoaderForAllDex;
+        this.isProtectedApp = isProtectedApp;
+        this.supportHotplugComponent = supportHotplugComponent;
         this.useSign = useSign;
 
         this.dexFilePattern = dexFilePattern;
         this.dexLoaderPattern = dexLoaderPattern;
+        this.dexIgnoreWarningLoaderPattern = dexIgnoreChangeLoaderPattern;
         this.dexMode = dexMode;
 
         this.soFilePattern = soFilePattern;
         this.resourceFilePattern = resourceFilePattern;
         this.resourceIgnoreChangePattern = resourceIgnoreChangePattern;
+        this.resourceIgnoreChangeWarningPattern = resourceIgnoreChangeWarningPattern;
         this.largeModSize = largeModSize;
         this.useApplyResource = useApplyResource;
 
         this.configFields = configFields;
 
         this.sevenZipPath = sevenZipPath;
+        this.arkHotPatchPath = arkHotPatchPath;
+        this.arkHotPatchName = arkHotPatchName;
     }
 
     public static class Builder {
@@ -132,13 +165,19 @@ public class InputParam {
         private String  storealias;
         private String  storepass;
         private boolean ignoreWarning;
+        private boolean allowLoaderInAnyDex;
+        private boolean removeLoaderForAllDex;
+        private boolean isProtectedApp;
+        private boolean isComponentHotplugSupported;
         private boolean useSign;
 
         /**
          * tinkerPatch.dex
          */
-        private ArrayList<String>       dexFilePattern;
-        private ArrayList<String>       dexLoaderPattern;
+        private ArrayList<String> dexFilePattern;
+        private ArrayList<String> dexLoaderPattern;
+        private ArrayList<String> dexIgnoreWarningLoaderPattern;
+
         private String                  dexMode;
         /**
          * tinkerPatch.lib
@@ -152,6 +191,10 @@ public class InputParam {
          * tinkerPath.resource ignoreChange
          */
         private ArrayList<String>       resourceIgnoreChangePattern;
+        /**
+         * tinkerPatch.resource ignoreChangeWarning
+         */
+        private ArrayList<String>       resourceIgnoreChangeWarningPattern;
         /**
          * tinkerPath.resource largeModSize
          */
@@ -168,6 +211,12 @@ public class InputParam {
          * tinkerPatch.sevenZip
          */
         private String                  sevenZipPath;
+
+        /**
+         * tinkerPatch ark
+         */
+        private String arkHotPatchPath;
+        private String arkHotPatchName;
 
 
         public Builder() {
@@ -195,6 +244,11 @@ public class InputParam {
 
         public Builder setResourceIgnoreChangePattern(ArrayList<String> resourceIgnoreChangePattern) {
             this.resourceIgnoreChangePattern = resourceIgnoreChangePattern;
+            return this;
+        }
+
+        public Builder setResourceIgnoreChangeWarningPattern(ArrayList<String> resourceIgnoreChangeWarningPattern) {
+            this.resourceIgnoreChangeWarningPattern = resourceIgnoreChangeWarningPattern;
             return this;
         }
 
@@ -243,8 +297,33 @@ public class InputParam {
             return this;
         }
 
+        public Builder setAllowLoaderInAnyDex(boolean allowLoaderInAnyDex) {
+            this.allowLoaderInAnyDex = allowLoaderInAnyDex;
+            return this;
+        }
+
+        public Builder setRemoveLoaderForAllDex(boolean removeLoaderForAllDex){
+            this.removeLoaderForAllDex = removeLoaderForAllDex;
+            return this;
+        }
+
+        public Builder setIsProtectedApp(boolean isProtectedApp) {
+            this.isProtectedApp = isProtectedApp;
+            return this;
+        }
+
+        public Builder setIsComponentHotplugSupported(boolean isComponentHotplugSupported) {
+            this.isComponentHotplugSupported = isComponentHotplugSupported;
+            return this;
+        }
+
         public Builder setDexLoaderPattern(ArrayList<String> dexLoaderPattern) {
             this.dexLoaderPattern = dexLoaderPattern;
+            return this;
+        }
+
+        public Builder setDexIgnoreWarningLoaderPattern(ArrayList<String> loader) {
+            this.dexIgnoreWarningLoaderPattern = loader;
             return this;
         }
 
@@ -268,6 +347,16 @@ public class InputParam {
             return this;
         }
 
+        public Builder setArkHotPath(String path) {
+            this.arkHotPatchPath = path;
+            return this;
+        }
+
+        public Builder setArkHotName(String name) {
+            this.arkHotPatchName = name;
+            return this;
+        }
+
         public InputParam create() {
             return new InputParam(
                     oldApk,
@@ -278,17 +367,25 @@ public class InputParam {
                     storealias,
                     storepass,
                     ignoreWarning,
+                    allowLoaderInAnyDex,
+                    removeLoaderForAllDex,
+                    isProtectedApp,
+                    isComponentHotplugSupported,
                     useSign,
                     dexFilePattern,
                     dexLoaderPattern,
+                    dexIgnoreWarningLoaderPattern,
                     dexMode,
                     soFilePattern,
                     resourceFilePattern,
                     resourceIgnoreChangePattern,
+                    resourceIgnoreChangeWarningPattern,
                     largeModSize,
                     useApplyResource,
                     configFields,
-                    sevenZipPath
+                    sevenZipPath,
+                    arkHotPatchPath,
+                    arkHotPatchName
             );
         }
     }

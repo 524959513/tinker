@@ -57,12 +57,16 @@ import java.util.regex.Pattern;
  * Created by tangyinsheng on 2016/4/14.
  */
 public final class DexClassesComparator {
-    public static final int COMPARE_MODE_NORMAL = 0;
-    public static final int COMPARE_MODE_CAUSE_REF_CHANGE_ONLY = 1;
     private static final String TAG = "DexClassesComparator";
+
+    public static final int COMPARE_MODE_NORMAL = 0;
+    public static final int COMPARE_MODE_REFERRER_AFFECTED_CHANGE_ONLY = 1;
+
     private static final int DBG_FIRST_SPECIAL = 0x0A;  // the smallest special opcode
     private static final int DBG_LINE_BASE   = -4;      // the smallest line number increment
     private static final int DBG_LINE_RANGE  = 15;      // the number of line increments represented
+
+    private int compareMode = COMPARE_MODE_NORMAL;
     private final List<DexClassInfo> addedClassInfoList = new ArrayList<>();
     private final List<DexClassInfo> deletedClassInfoList = new ArrayList<>();
     // classDesc => [oldClassInfo, newClassInfo]
@@ -73,17 +77,17 @@ public final class DexClassesComparator {
     private final Set<String> newDescriptorOfClassesToCheck = new HashSet<>();
     private final Map<String, DexClassInfo> oldClassDescriptorToClassInfoMap = new HashMap<>();
     private final Map<String, DexClassInfo> newClassDescriptorToClassInfoMap = new HashMap<>();
+
     // Record class descriptors whose references key (index or offset) of methods and fields
     // are changed.
     private final Set<String> refAffectedClassDescs = new HashSet<>();
     private final DexPatcherLogger logger = new DexPatcherLogger();
-    private int compareMode = COMPARE_MODE_NORMAL;
 
     public DexClassesComparator(String patternStringOfClassDescToCheck) {
         patternsOfClassDescToCheck.add(
-            Pattern.compile(
-                PatternUtils.dotClassNamePatternToDescriptorRegEx(patternStringOfClassDescToCheck)
-            )
+                Pattern.compile(
+                        PatternUtils.dotClassNamePatternToDescriptorRegEx(patternStringOfClassDescToCheck)
+                )
         );
     }
 
@@ -100,9 +104,9 @@ public final class DexClassesComparator {
     public DexClassesComparator(Collection<String> patternStringsOfClassDescToCheck) {
         for (String patternStr : patternStringsOfClassDescToCheck) {
             patternsOfClassDescToCheck.add(
-                Pattern.compile(
-                    PatternUtils.dotClassNamePatternToDescriptorRegEx(patternStr)
-                )
+                    Pattern.compile(
+                            PatternUtils.dotClassNamePatternToDescriptorRegEx(patternStr)
+                    )
             );
         }
     }
@@ -122,15 +126,15 @@ public final class DexClassesComparator {
         patternsOfIgnoredRemovedClassDesc.clear();
         for (String patternStr : patternStringsOfLoaderClassDesc) {
             patternsOfIgnoredRemovedClassDesc.add(
-                Pattern.compile(
-                    PatternUtils.dotClassNamePatternToDescriptorRegEx(patternStr)
-                )
+                    Pattern.compile(
+                            PatternUtils.dotClassNamePatternToDescriptorRegEx(patternStr)
+                    )
             );
         }
     }
 
     public void setCompareMode(int mode) {
-        if (mode == COMPARE_MODE_NORMAL || mode == COMPARE_MODE_CAUSE_REF_CHANGE_ONLY) {
+        if (mode == COMPARE_MODE_NORMAL || mode == COMPARE_MODE_REFERRER_AFFECTED_CHANGE_ONLY) {
             this.compareMode = mode;
         } else {
             throw new IllegalArgumentException("bad compare mode: " + mode);
@@ -224,19 +228,22 @@ public final class DexClassesComparator {
             // from result.
             if (Utils.isStringMatchesPatterns(desc, patternsOfIgnoredRemovedClassDesc)) {
                 logger.i(TAG, "Ignored deleted class: %s", desc);
-                continue;
             } else {
                 logger.i(TAG, "Deleted class: %s", desc);
+                deletedClassInfoList.add(oldClassDescriptorToClassInfoMap.get(desc));
             }
-            deletedClassInfoList.add(oldClassDescriptorToClassInfoMap.get(desc));
         }
 
         Set<String> addedClassDescs = new HashSet<>(newDescriptorOfClassesToCheck);
         addedClassDescs.removeAll(oldDescriptorOfClassesToCheck);
 
         for (String desc : addedClassDescs) {
-            logger.i(TAG, "Added class: %s", desc);
-            addedClassInfoList.add(newClassDescriptorToClassInfoMap.get(desc));
+            if (Utils.isStringMatchesPatterns(desc, patternsOfIgnoredRemovedClassDesc)) {
+                logger.i(TAG, "Ignored added class: %s", desc);
+            } else {
+                logger.i(TAG, "Added class: %s", desc);
+                addedClassInfoList.add(newClassDescriptorToClassInfoMap.get(desc));
+            }
         }
 
         Set<String> mayBeChangedClassDescs = new HashSet<>(oldDescriptorOfClassesToCheck);
@@ -253,32 +260,43 @@ public final class DexClassesComparator {
                             oldClassInfo.classDef,
                             newClassInfo.classDef
                     )) {
-                        logger.i(TAG, "Changed class: %s", desc);
-                        changedClassDescToClassInfosMap.put(
-                                desc, new DexClassInfo[]{oldClassInfo, newClassInfo}
-                        );
+                        if (Utils.isStringMatchesPatterns(desc, patternsOfIgnoredRemovedClassDesc)) {
+                            logger.i(TAG, "Ignored changed class: %s", desc);
+                        } else {
+                            logger.i(TAG, "Changed class: %s", desc);
+                            changedClassDescToClassInfosMap.put(
+                                    desc, new DexClassInfo[]{oldClassInfo, newClassInfo}
+                            );
+                        }
                     }
                     break;
                 }
-                case COMPARE_MODE_CAUSE_REF_CHANGE_ONLY: {
-                    if (isClassChangeAffectedToRef(
+                case COMPARE_MODE_REFERRER_AFFECTED_CHANGE_ONLY: {
+                    if (isClassChangeAffectedToReferrer(
                             oldClassInfo.owner,
                             newClassInfo.owner,
                             oldClassInfo.classDef,
                             newClassInfo.classDef
                     )) {
-                        logger.i(TAG, "Ref-changed class: %s", desc);
-                        changedClassDescToClassInfosMap.put(
-                                desc, new DexClassInfo[]{oldClassInfo, newClassInfo}
-                        );
+                        if (Utils.isStringMatchesPatterns(desc, patternsOfIgnoredRemovedClassDesc)) {
+                            logger.i(TAG, "Ignored referrer-affected changed class: %s", desc);
+                        } else {
+                            logger.i(TAG, "Referrer-affected change class: %s", desc);
+                            changedClassDescToClassInfosMap.put(
+                                    desc, new DexClassInfo[]{oldClassInfo, newClassInfo}
+                            );
+                        }
                     }
+                    break;
+                }
+                default: {
                     break;
                 }
             }
         }
     }
 
-    private boolean isClassChangeAffectedToRef(
+    private boolean isClassChangeAffectedToReferrer(
             Dex oldDex,
             Dex newDex,
             ClassDef oldClassDef,
@@ -295,7 +313,7 @@ public final class DexClassesComparator {
             }
 
             // Any changes on superclass could affect refs of members in current class.
-            if (isTypeChangeAffectedToRef(
+            if (isTypeChangeAffectedToReferrer(
                     oldDex, newDex, oldClassDef.supertypeIndex, newClassDef.supertypeIndex
             )) {
                 result = true;
@@ -306,7 +324,7 @@ public final class DexClassesComparator {
             // of members in current class.
             short[] oldInterfaceTypeIds = oldDex.interfaceTypeIndicesFromClassDef(oldClassDef);
             short[] newInterfaceTypeIds = newDex.interfaceTypeIndicesFromClassDef(newClassDef);
-            if (isTypeIdsChangeAffectedToRef(
+            if (isTypeIdsChangeAffectedToReferrer(
                     oldDex, newDex, oldInterfaceTypeIds, newInterfaceTypeIds, false
             )) {
                 result = true;
@@ -319,7 +337,7 @@ public final class DexClassesComparator {
                     (oldClassDef.classDataOffset != 0 ? oldDex.readClassData(oldClassDef) : null);
             ClassData newClassData =
                     (newClassDef.classDataOffset != 0 ? newDex.readClassData(newClassDef) : null);
-            if (isClassDataChangeAffectedToRef(
+            if (isClassDataChangeAffectedToReferrer(
                     oldDex, newDex, oldClassData, newClassData
             )) {
                 result = true;
@@ -334,7 +352,7 @@ public final class DexClassesComparator {
         return result;
     }
 
-    private boolean isTypeChangeAffectedToRef(
+    private boolean isTypeChangeAffectedToReferrer(
             Dex oldDex, Dex newDex, int oldTypeId, int newTypeId
     ) {
         if (oldTypeId != ClassDef.NO_INDEX && newTypeId != ClassDef.NO_INDEX) {
@@ -349,7 +367,7 @@ public final class DexClassesComparator {
             ClassDef oldClassDef = (oldClassInfo != null ? oldClassInfo.classDef : null);
             ClassDef newClassDef = (newClassInfo != null ? newClassInfo.classDef : null);
             if (oldClassDef != null && newClassDef != null) {
-                return isClassChangeAffectedToRef(oldClassInfo.owner, newClassInfo.owner, oldClassDef, newClassDef);
+                return isClassChangeAffectedToReferrer(oldClassInfo.owner, newClassInfo.owner, oldClassDef, newClassDef);
             } else
             if (oldClassDef == null && newClassDef == null) {
                 return false;
@@ -366,7 +384,7 @@ public final class DexClassesComparator {
         return false;
     }
 
-    private boolean isTypeIdsChangeAffectedToRef(
+    private boolean isTypeIdsChangeAffectedToReferrer(
             Dex oldDex,
             Dex newDex,
             short[] oldTypeIds,
@@ -386,7 +404,7 @@ public final class DexClassesComparator {
                     return true;
                 }
             } else {
-                if (isTypeChangeAffectedToRef(oldDex, newDex, oldTypeIds[i], newTypeIds[i])) {
+                if (isTypeChangeAffectedToReferrer(oldDex, newDex, oldTypeIds[i], newTypeIds[i])) {
                     return true;
                 }
             }
@@ -395,32 +413,32 @@ public final class DexClassesComparator {
         return false;
     }
 
-    private boolean isClassDataChangeAffectedToRef(
+    private boolean isClassDataChangeAffectedToReferrer(
             Dex oldDex,
             Dex newDex,
             ClassData oldClassData,
             ClassData newClassData
     ) {
         if (oldClassData != null && newClassData != null) {
-            if (isFieldsChangeAffectedToRef(
+            if (isFieldsChangeAffectedToReferrer(
                     oldDex, newDex, oldClassData.instanceFields, newClassData.instanceFields
             )) {
                 return true;
             }
 
-            if (isFieldsChangeAffectedToRef(
+            if (isFieldsChangeAffectedToReferrer(
                     oldDex, newDex, oldClassData.staticFields, newClassData.staticFields
             )) {
                 return true;
             }
 
-            if (isMethodsChangeAffectedToRef(
+            if (isMethodsChangeAffectedToReferrer(
                     oldDex, newDex, oldClassData.directMethods, newClassData.directMethods
             )) {
                 return true;
             }
 
-            if (isMethodsChangeAffectedToRef(
+            if (isMethodsChangeAffectedToReferrer(
                     oldDex, newDex, oldClassData.virtualMethods, newClassData.virtualMethods
             )) {
                 return true;
@@ -433,7 +451,7 @@ public final class DexClassesComparator {
         return false;
     }
 
-    private boolean isFieldsChangeAffectedToRef(
+    private boolean isFieldsChangeAffectedToReferrer(
             Dex oldDex,
             Dex newDex,
             Field[] oldFields,
@@ -471,7 +489,7 @@ public final class DexClassesComparator {
         return false;
     }
 
-    private boolean isMethodsChangeAffectedToRef(
+    private boolean isMethodsChangeAffectedToReferrer(
             Dex oldDex,
             Dex newDex,
             Method[] oldMethods,
@@ -516,7 +534,7 @@ public final class DexClassesComparator {
 
             short[] oldParameterIds = oldDex.parameterTypeIndicesFromMethodId(oldMethodId);
             short[] newParameterIds = newDex.parameterTypeIndicesFromMethodId(newMethodId);
-            if (isTypeIdsChangeAffectedToRef(
+            if (isTypeIdsChangeAffectedToReferrer(
                     oldDex, newDex, oldParameterIds, newParameterIds, true
             )) {
                 return true;
@@ -1179,13 +1197,7 @@ public final class DexClassesComparator {
             return false;
         }
 
-        if (!isSameTries(oldDex, newDex, oldCode.tries, newCode.tries, insnComparator)) {
-            return false;
-        }
-
-        return isSameCatchHandlers(
-                oldDex, newDex, oldCode.catchHandlers, newCode.catchHandlers, insnComparator
-        );
+        return isSameTriesAndCatchHandlers(oldDex, newDex, oldCode.tries, newCode.tries, oldCode.catchHandlers, newCode.catchHandlers, insnComparator);
     }
 
     private boolean isSameDebugInfo(
@@ -1350,11 +1362,13 @@ public final class DexClassesComparator {
         return true;
     }
 
-    private boolean isSameTries(
+    private boolean isSameTriesAndCatchHandlers(
             Dex oldDex,
             Dex newDex,
             Code.Try[] oldTries,
             Code.Try[] newTries,
+            Code.CatchHandler[] oldHandlers,
+            Code.CatchHandler[] newHandlers,
             InstructionComparator insnComparator
     ) {
         if (oldTries.length != newTries.length) {
@@ -1364,10 +1378,14 @@ public final class DexClassesComparator {
         for (int i = 0; i < oldTries.length; ++i) {
             Code.Try oldTry = oldTries[i];
             Code.Try newTry = newTries[i];
-            if (oldTry.instructionCount != newTry.instructionCount) {
-                return false;
-            }
-            if (oldTry.catchHandlerIndex != newTry.catchHandlerIndex) {
+            // Let InstructionComparator do this since it can translate 16-bit code unit count
+            // into actual instruction count.
+            // if (oldTry.instructionCount != newTry.instructionCount) {
+            //     return false;
+            // }
+            final Code.CatchHandler oldCatchHandler = oldHandlers[oldTry.catchHandlerIndex];
+            final Code.CatchHandler newCatchHandler = newHandlers[newTry.catchHandlerIndex];
+            if (!isSameCatchHandler(oldDex, newDex, oldCatchHandler, newCatchHandler, insnComparator)) {
                 return false;
             }
             if (!insnComparator.isSameInstruction(oldTry.startAddress, newTry.startAddress)) {
@@ -1378,52 +1396,43 @@ public final class DexClassesComparator {
         return true;
     }
 
-    private boolean isSameCatchHandlers(
+    private boolean isSameCatchHandler(
             Dex oldDex,
             Dex newDex,
-            Code.CatchHandler[] oldCatchHandlers,
-            Code.CatchHandler[] newCatchHandlers,
+            Code.CatchHandler oldCatchHandler,
+            Code.CatchHandler newCatchHandler,
             InstructionComparator insnComparator
     ) {
-        if (oldCatchHandlers.length != newCatchHandlers.length) {
+        int oldTypeAddrPairCount = oldCatchHandler.typeIndexes.length;
+        int newTypeAddrPairCount = newCatchHandler.typeIndexes.length;
+        if (oldTypeAddrPairCount != newTypeAddrPairCount) {
             return false;
         }
 
-        for (int i = 0; i < oldCatchHandlers.length; ++i) {
-            Code.CatchHandler oldCatchHandler = oldCatchHandlers[i];
-            Code.CatchHandler newCatchHandler = newCatchHandlers[i];
+        if (oldCatchHandler.catchAllAddress != -1 && newCatchHandler.catchAllAddress != -1) {
+            return insnComparator.isSameInstruction(
+                    oldCatchHandler.catchAllAddress, newCatchHandler.catchAllAddress
+            );
+        } else {
+            if (!(oldCatchHandler.catchAllAddress == -1 && newCatchHandler.catchAllAddress == -1)) {
+                return false;
+            }
+        }
 
-            int oldTypeAddrPairCount = oldCatchHandler.typeIndexes.length;
-            int newTypeAddrPairCount = newCatchHandler.typeIndexes.length;
-            if (oldTypeAddrPairCount != newTypeAddrPairCount) {
+        for (int j = 0; j < oldTypeAddrPairCount; ++j) {
+            if (!isSameClassDesc(
+                    oldDex,
+                    newDex,
+                    oldCatchHandler.typeIndexes[j],
+                    newCatchHandler.typeIndexes[j]
+            )) {
                 return false;
             }
 
-            if (oldCatchHandler.catchAllAddress != -1 && newCatchHandler.catchAllAddress != -1) {
-                return insnComparator.isSameInstruction(
-                        oldCatchHandler.catchAllAddress, newCatchHandler.catchAllAddress
-                );
-            } else {
-                if (!(oldCatchHandler.catchAllAddress == -1 && newCatchHandler.catchAllAddress == -1)) {
-                    return false;
-                }
-            }
-
-            for (int j = 0; j < oldTypeAddrPairCount; ++j) {
-                if (!isSameClassDesc(
-                        oldDex,
-                        newDex,
-                        oldCatchHandler.typeIndexes[j],
-                        newCatchHandler.typeIndexes[j]
-                )) {
-                    return false;
-                }
-
-                if (!insnComparator.isSameInstruction(
-                        oldCatchHandler.addresses[j], newCatchHandler.addresses[j]
-                )) {
-                    return false;
-                }
+            if (!insnComparator.isSameInstruction(
+                    oldCatchHandler.addresses[j], newCatchHandler.addresses[j]
+            )) {
+                return false;
             }
         }
 
@@ -1459,6 +1468,11 @@ public final class DexClassesComparator {
                 return false;
             }
             return owner.computeSignature(false).equals(other.owner.computeSignature(false));
+        }
+
+        @Override
+        public int hashCode() {
+            return owner.computeSignature(false).hashCode();
         }
     }
 

@@ -22,7 +22,7 @@ import android.os.SystemClock;
 
 import com.tencent.tinker.lib.tinker.TinkerApplicationHelper;
 import com.tencent.tinker.lib.util.TinkerLog;
-import com.tencent.tinker.loader.app.ApplicationLike;
+import com.tencent.tinker.entry.ApplicationLike;
 import com.tencent.tinker.loader.shareutil.ShareConstants;
 import com.tencent.tinker.loader.shareutil.ShareTinkerInternals;
 
@@ -65,22 +65,26 @@ public class SampleUncaughtExceptionHandler implements Thread.UncaughtExceptionH
      * If it use Xposed, we can just clean patch or mention user to uninstall it.
      */
     private void tinkerPreVerifiedCrashHandler(Throwable ex) {
+        ApplicationLike applicationLike = TinkerManager.getTinkerApplicationLike();
+        if (applicationLike == null || applicationLike.getApplication() == null) {
+            TinkerLog.w(TAG, "applicationlike is null");
+            return;
+        }
+
+        if (!TinkerApplicationHelper.isTinkerLoadSuccess(applicationLike)) {
+            TinkerLog.w(TAG, "tinker is not loaded");
+            return;
+        }
+
         Throwable throwable = ex;
         boolean isXposed = false;
         while (throwable != null) {
             if (!isXposed) {
                 isXposed = Utils.isXposedExists(throwable);
             }
-            if (isXposed) {
-                //method 1
-                ApplicationLike applicationLike = TinkerManager.getTinkerApplicationLike();
-                if (applicationLike == null || applicationLike.getApplication() == null) {
-                    return;
-                }
 
-                if (!TinkerApplicationHelper.isTinkerLoadSuccess(applicationLike)) {
-                    return;
-                }
+            // xposed?
+            if (isXposed) {
                 boolean isCausedByXposed = false;
                 //for art, we can't know the actually crash type
                 //just ignore art
